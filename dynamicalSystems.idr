@@ -1,15 +1,11 @@
-module Main
+module Dynamical
 
 import Data.Vect
 %access public export
 
-
 --- Code by David I. Spivak and David Jaz Myers
 --- © 2020  
 
-
-main : IO ()
-main = pure ()
 
 ------ The category of arenas ------
 
@@ -482,6 +478,17 @@ dynBehavior dyn st = current :: choice
 
 runBehav : (d : DynSystem) -> enclose (body d) -> (state d) -> Stream (pos $ body d)
 runBehav dyn phys st = toStreamBehavior (dynBehavior dyn st) phys
+
+
+UserDriven : DynSystem
+UserDriven = MkDynSystem (IO ()) (Motor Double) userInput
+          where 
+            userInput : Lens (Self (IO ())) (Motor Double)
+            userInput = MkLens obs (\_, _ => pure ())
+            where
+              obs : IO () -> Double
+              obs _ = fromMaybe 100.0 . parseDouble . unsafePerformIO $ getLine
+
 
 
 --- Debugging ---
