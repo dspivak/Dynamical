@@ -1,11 +1,20 @@
-module Lens
+module Main
 
+import Data.Vect
 %access public export
+
 
 --- Code by David I. Spivak and David Jaz Myers
 --- © 2020  
 
+
+main : IO ()
+main = pure ()
+
 ------ The category of arenas ------
+
+
+
 
 
 --- Objects ---
@@ -32,13 +41,13 @@ idLens a = MkLens id (\_ => id)
 
 infixr 4 <.>
 (<.>) : Lens a2 a3 -> Lens a1 a2 -> Lens a1 a3
-(<.>) life23 life12 = MkLens obs int
+(<.>) lens23 lens12 = MkLens obs int
       where
         obs : pos a1 -> pos a3
-        obs = (observe life23) . (observe life12)
+        obs = (observe lens23) . (observe lens12)
 
         int : (p : pos a1) -> (dis a3 (obs p)) -> dis a1 p
-        int p = (interpret life12 p) . (interpret life23 (observe life12 p))
+        int p = (interpret lens12 p) . (interpret lens23 (observe lens12 p))
 
 --- Manipulations on Arenas ---
 
@@ -47,8 +56,6 @@ Display a = (p : pos a ** dis a p)
 
 AsFunctor : Arena -> Type -> Type
 AsFunctor a y = (p : pos a ** dis a p -> y)
-
-
 
 
 
@@ -63,19 +70,22 @@ Self s = IOArena s s
 Closed : Arena
 Closed = IOArena () ()
 
+
+            
+
 --- Reflections to Type ---
 
-const : Type -> Arena
-const t = IOArena Void t
+Exception : Type -> Arena
+Exception t = IOArena Void t
 
-motor : Type -> Arena
-motor t = IOArena () t
+Motor : Type -> Arena
+Motor t = IOArena () t
 
-sensor : Type -> Arena
-sensor t = IOArena t ()
+Sensor : Type -> Arena
+Sensor t = IOArena t ()
 
 ev0 : Arena -> Arena
-ev0 a = const $ AsFunctor a Void
+ev0 a = Exception $ AsFunctor a Void
 
 fromEv0 : (a : Arena) -> Lens (ev0 a) a
 fromEv0 a = MkLens o i
@@ -88,25 +98,63 @@ fromEv0 a = MkLens o i
             i (p ** f) = f
 
 ev1 : Arena -> Arena
-ev1 a = const $ pos a -- = const $ AsFunctor a ()
+ev1 a = Exception $ pos a -- = Exception $ AsFunctor a ()
 
 toEv1 : (a : Arena) -> Lens a (ev1 a)
 toEv1 a = MkLens id (\_ => absurd)
 
 ev1y : Arena -> Arena
-ev1y a = motor $ pos a
+ev1y a = Motor $ pos a
 
 fromEv1y : (a : Arena) -> Lens (ev1y a) a
 fromEv1y a = MkLens id (\_, _ => ()) 
 
-constantFunction : {t, u : Type} -> (t -> u) -> Lens (const t) (const u)
+constantFunction : {t, u : Type} -> (t -> u) -> Lens (Exception t) (Exception u)
 constantFunction {t} {u} f = MkLens f (\_ => id)
 
-motorFunction : {t, u : Type} -> (t -> u) -> Lens (motor t) (motor u)
-motorFunction {t} {u} f = MkLens f (\_ => id) 
+MotorFunction : {t, u : Type} -> (t -> u) -> Lens (Motor t) (Motor u)
+MotorFunction {t} {u} f = MkLens f (\_ => id) 
 
-sensorFunction : {t, u: Type} -> (t -> u) -> Lens (sensor u) (sensor t)
-sensorFunction {t} {u} f = MkLens id (\_ => f)
+SensorFunction : {t, u: Type} -> (t -> u) -> Lens (Sensor u) (Sensor t)
+SensorFunction {t} {u} f = MkLens id (\_ => f)
+
+enclose : Arena -> Type
+enclose a = Lens a Closed
+
+encloseFunction : {t, u : Type} -> (t -> u) -> Lens (IOArena u t) Closed
+encloseFunction {t} {u} f = MkLens (\_ => ()) (\d => \_ => f d)
+
+auto : {m : Type} -> enclose (Motor m)
+auto {m} = encloseFunction $ \_ => ()
+
+--- functors and monads ---
+
+lift : (f : Type -> Type) -> Functor f => Arena -> Arena
+lift f ar = MkArena (pos ar) fdis
+          where
+            fdis : (p : pos ar) -> Type
+            fdis p = f $ dis ar p
+
+LiftLens : {a, b : Arena} -> (f : Type -> Type) -> Functor f => 
+           Lens a b -> Lens (lift f a) (lift f b) 
+LiftLens {a} {b} f lens = MkLens (observe lens) int
+          where
+            int : (p : pos a) -> f $ dis b (observe lens p) -> f $ dis a p 
+            int p = map $ interpret lens p
+
+extract : {a : Arena} -> (f : Type -> Type) -> Monad f =>
+            Lens (lift f a) a
+extract {a} f = MkLens id pur 
+          where
+            pur : (p : pos a) -> dis a p -> dis (lift f a) p
+            pur p = pure
+
+extend : {a : Arena} -> (f : Type -> Type) -> Monad f =>
+            Lens (lift f a) (lift f (lift f a))
+extend {a} f = MkLens id joi
+          where
+            joi : (p : pos a) -> dis (lift f (lift f a)) p -> dis (lift f a) p
+            joi p = join  
 
 --- sum ---
 
@@ -229,6 +277,8 @@ juxtLens {a1} {b1} {a2} {b2} l1 l2 = MkLens o i
             i : (p : pos (a1 & a2)) -> dis (b1 & b2) (o p) -> dis (a1 & a2) p
             i (p1, p2) (d1, d2) = (interpret l1 p1 d1, interpret l2 p2 d2)
 
+
+
 --- Circle product ---
 
 infixr 4 @@
@@ -242,7 +292,8 @@ infixr 4 @@
 
 
 
-circLens : Lens a1 b1 -> Lens a2 b2 -> Lens (a1 @@ a2) (b1 @@ b2)
+circLens : {a1 : Arena} -> {b1 : Arena} -> {a2 : Arena} -> {b2 : Arena} -> 
+           Lens a1 b1 -> Lens a2 b2 -> Lens (a1 @@ a2) (b1 @@ b2)
 circLens {a1} {b1} {a2} {b2} l1 l2 = MkLens o i
           where
             o : pos (a1 @@ a2) -> pos (b1 @@ b2)
@@ -252,6 +303,19 @@ circLens {a1} {b1} {a2} {b2} l1 l2 = MkLens o i
             where
               e1 : dis a1 p 
               e1 = interpret l1 p d1
+
+CircPow : Arena -> Nat -> Arena
+CircPow _  Z     = Closed
+CircPow a (S n) = a @@ CircPow a n 
+
+CircPowLens : {a : Arena} -> {b : Arena} -> 
+              Lens a b -> (n : Nat) -> Lens (CircPow a n) (CircPow b n)
+CircPowLens {a} {b} _     Z    = idLens Closed 
+CircPowLens {a} {b} lens (S n) = circLens lens (CircPowLens lens n)
+
+MotorPow : (t : Type) -> (n : Nat) -> Lens (CircPow (Motor t) n) (Motor (Vect n t))
+MotorPow t Z = MkLens (\_ => Nil) (\_, _ => ())
+
 
 --- Selves are comonoids ---
 
@@ -270,6 +334,29 @@ comult s = MkLens o i
             o x = (x ** id)
             i : (x : s) -> (dis ((Self s) @@ (Self s)) (o x)) -> s
             i x (d1 ** d2) = d2
+
+comultPow : (s : Type) -> (n : Nat) -> Lens (Self s) (CircPow (Self s) n)
+comultPow s  Z    = counit s
+comultPow s (S n) = (circLens (idLens (Self s)) (comultPow s n)) <.> (comult s)
+
+codata Behavior : (ar : Arena) -> Type where
+          (::) : (p : pos ar) -> (dis ar p -> Behavior ar) -> Behavior ar
+
+head : Behavior ar -> pos ar
+head (p :: _) = p
+
+tail : (b : Behavior ar) -> dis ar (head b) -> Behavior ar
+tail (_ :: t) = t
+
+toStreamBehavior : {a : Arena} -> (b : Behavior a) -> (phys : enclose a) -> Stream (pos a)
+toStreamBehavior {a} b phys = currpos :: toStreamBehavior rest phys
+  where
+    currpos : pos a
+    currpos = head b
+
+    rest : Behavior a
+    rest = tail b $ interpret phys currpos ()
+
 
 
 
@@ -306,7 +393,7 @@ infixr 4 ^
 (^) a b = prod (pos a ** arena)
           where
             arena : pos a -> Arena
-            arena p = b @@ ((const $ dis a p) <++> Closed)
+            arena p = b @@ ((Exception $ dis a p) <++> Closed)
 
 --- Internal Hom ---
 
@@ -315,125 +402,124 @@ infixr 4 ^^
 (^^) a b = prod (pos a ** arena)
           where 
             arena : pos a -> Arena
-            arena p = b @@ (motor $ dis a p)
+            arena p = b @@ (Motor $ dis a p)
 
 eval : {a : Arena} -> {b : Arena} -> Lens (a & (b ^^ a)) b
 eval {a} {b} = MkLens obs int
           where
             obs : (pos a, pos (b ^^ a)) -> pos b
             int : (p : (pos a, pos (b ^^ a))) -> dis b (obs p) -> dis (a & (b ^^ a)) p
-            obs (pa, pab) = ?o
-            int p d = ?i
+            obs (pa, pab) = ?evalo
+            int p d = ?evali
 
---- Dynamical systems ---
+--- DynSystemical systems ---
 
 
-record Dynam where
-       constructor MkDynam
+record DynSystem where
+       constructor MkDynSystem
        state : Type
        body  : Arena
-       life  : Lens (Self state) body
+       pheno : Lens (Self state) body
 
-{- 
-   David Jaz suggests the following:
-      JazDynam : (state : Type) -> (body : Arena) -> Type
-      JazDynam state body = Lens (Self state) body
-
-      JazMotor : (state : Type) -> (output : Type) -> Type
-      JazMotor state output = JazDynam state (motor output)
-
-      JazMotorToDynam : JazMotor s o -> JazDynam s (motor o)
-      JazMotorToDynam = id
-
--}
-
-record MotorDynam where
-       constructor MkMotorDynam
-       state  : Type
-       output : Type
-       life   : Lens (Self state) (motor output) 
+static : DynSystem
+static = MkDynSystem () Closed (MotorFunction id)
 
 
-
-run : (d : MotorDynam) -> (state d) -> Stream (output d)
-run d s = (observe (life d) s) :: (run d next)
-        where
-          next : state d
-          next = interpret (life d) s ()
-
-motorToDynam : MotorDynam -> Dynam
-motorToDynam b = MkDynam (state b) (motor (output b)) (life b)
-  
-
-
-static : Dynam
-static = MkDynam () Closed (motorFunction id)
 
 infixr 4 &&&
-(&&&) : Dynam -> Dynam -> Dynam
-(&&&) dyn1 dyn2 = MkDynam state12 body12 life12
+(&&&) : DynSystem -> DynSystem -> DynSystem
+(&&&) dyn1 dyn2 = MkDynSystem state12 body12 pheno12
           where
             state12 : Type
             body12  : Arena
-            life12  : Lens (Self state12) body12
+            pheno12 : Lens (Self state12) body12
             state12 = (state dyn1, state dyn2)
             body12  = (body dyn1) & (body dyn2)
-            life12  = MkLens o i
+            pheno12 = MkLens o i
             where
               o : (state dyn1, state dyn2) -> (pos (body dyn1), pos (body dyn2))
               i : (s12 : (state dyn1, state dyn2)) -> dis body12 (o s12) -> state12 
-              o (s1, s2) = (observe (life dyn1) s1, observe (life dyn2) s2)
+              o (s1, s2) = (observe (pheno dyn1) s1, observe (pheno dyn2) s2)
               i (s1, s2) (d1, d2) = 
-                (interpret (life dyn1) s1 d1, interpret (life dyn2) s2 d2)
+                (interpret (pheno dyn1) s1 d1, interpret (pheno dyn2) s2 d2)
 
-juxtapose : List Dynam -> Dynam
+juxtapose : List DynSystem -> DynSystem
 juxtapose []        = static
 juxtapose [d]       = d
 juxtapose (d :: ds) = d &&& (juxtapose ds)
 
-install : (d : Dynam) -> (a : Arena) -> Lens (body d) a -> Dynam
-install d a l = MkDynam (state d) a (l <.> (life d))
+install : (d : DynSystem) -> (a : Arena) -> Lens (body d) a -> DynSystem
+install d a l = MkDynSystem (state d) a (l <.> (pheno d))
 
-installMotor : (d : Dynam) -> (output : Type) -> Lens (body d) (motor output) -> MotorDynam
-installMotor d o l = MkMotorDynam (state d) o (l <.> (life d))
+speedUp : DynSystem -> Nat -> DynSystem
+speedUp dyn n = MkDynSystem (state dyn) fastBody fastWork
+            where
+              fastBody   : Arena
+              fastWork   : Lens (Self $ state dyn) fastBody
+              fastBody   = CircPow (body dyn) n
+              fastWork   = CircPowLens (pheno dyn) n <.> comultPow (state dyn) n
+
+
+
+run : (d : DynSystem) -> enclose (body d) -> (state d) -> Stream (pos $ body d)
+run d e s = outp :: (run d e next)
+            where
+              outp : pos $ body d
+              next : state d
+              outp = observe (pheno d) s
+              next = interpret (pheno d) s $ interpret e outp ()
+
+
+
+
+dynBehavior : (d : DynSystem) -> (state d) -> Behavior (body d)
+dynBehavior dyn st = current :: choice
+            where
+              current : pos $ body dyn
+              choice  : dis (body dyn) current -> Behavior (body dyn)
+              current  = observe (pheno dyn) st 
+              choice d = dynBehavior dyn (interpret (pheno dyn) st d)
+
+runBehav : (d : DynSystem) -> enclose (body d) -> (state d) -> Stream (pos $ body d)
+runBehav dyn phys st = toStreamBehavior (dynBehavior dyn st) phys
 
 
 --- Debugging ---
 
-current : (d : Dynam) -> state d -> pos (body d)
-current d s = observe (life d) s
+current : (d : DynSystem) -> state d -> pos (body d)
+current d s = observe (pheno d) s
 
-feed : (dyn : Dynam) -> (s : state dyn) -> dis (body dyn) (observe (life dyn) s) -> state dyn
+feed : (dyn : DynSystem) -> (s : state dyn) -> dis (body dyn) (observe (pheno dyn) s) -> state dyn
 feed dyn s d = interpret play s d
           where 
             play : Lens (Self (state dyn)) (body dyn)
-            play = life dyn
+            play = pheno dyn
 
 --- Examples ---
 
 
-funcToDynam : {s : Type} -> {t : Type} -> (s -> t) -> Dynam
-funcToDynam {s} {t} f = MkDynam t bodyf lifef
+funcToDynSystem : {s : Type} -> {t : Type} -> (s -> t) -> DynSystem
+funcToDynSystem {s} {t} f = MkDynSystem t bodyf phenof
             where
               bodyf : Arena
-              lifef : Lens (Self t) bodyf
+              phenof : Lens (Self t) bodyf
               bodyf = IOArena s t
-              lifef = MkLens id (const f)
+              phenof = MkLens id (\_ => f)
 
 
 
 
-delay : (s : Type) -> Dynam
-delay s = funcToDynam (the (s -> s) id)
+delay : (s : Type) -> DynSystem
+delay s = funcToDynSystem (the (s -> s) id)
 
-plus : Dynam
-plus = funcToDynam (uncurry (+))
+plus : DynSystem
+plus = funcToDynSystem (uncurry (+))
 
 
-Prefib : Dynam
+Prefib : DynSystem
 Prefib = plus &&& (delay Integer)
 
-fibwd : Lens (body Prefib) (motor Integer)
+fibwd : Lens (body Prefib) (Motor Integer)
 fibwd = MkLens observe interpret 
           where
             observe : (Integer, Integer) -> Integer
@@ -442,33 +528,117 @@ fibwd = MkLens observe interpret
             interpret (pl, de) = \_ => ((de, pl), pl)
 
 
-Fibonacci : MotorDynam
-Fibonacci = installMotor Prefib Integer fibwd
+Fibonacci : DynSystem
+Fibonacci = install Prefib (Motor Integer) fibwd
+
 
 FibSeq : Stream Integer
-FibSeq = run Fibonacci (1, 1)
+FibSeq = run Fibonacci auto (1, 1)
 
 -- take 10 FibSeq
 
+-- Difference equation
+
+DncEq : (Double -> Double) -> DynSystem
+DncEq f = MkDynSystem Double (Motor Double) lens
+             where
+              lens : Lens (Self Double) (Motor Double) 
+              lens = MkLens id int
+              where
+                int : Double -> () -> Double
+                int d _ = d + (f d)
+
+DncEqSeq : (Double -> Double) -> Double -> Stream Double
+DncEqSeq f x0 = run (DncEq f) auto x0
+
+VslX1 : DynSystem
+VslX1 = MkDynSystem Double box1 pheno1
+      where
+      X1in   : Type
+      X1out  : Type
+      box1   : Arena
+      Q1     : Type
+      pheno1 : Lens (Self Q1) box1
+      X1in   = (Double, Double)
+      X1out  = Double            --
+      box1   = IOArena X1in X1out
+      Q1     = Double
+      pheno1 = MkLens readout1 ode1 
+        where
+        readout1 : Q1 -> X1out
+        ode1 : (q1 : Q1) -> X1in -> Q1
+        readout1 q1 = 0.1 * q1
+        ode1 q1 (x1ain, x1bin) = q1 + (f q1 x1ain x1bin)
+          where
+            f : Double -> Double -> Double -> Double
+            f q1 x1ain x1bin = -0.1 * q1 + 0.1 * x1ain + 0.1 * x1bin
+
+
+VslX2 : DynSystem
+VslX2 = MkDynSystem Double box2 pheno2
+      where
+      X2in   : Type
+      X2out  : Type
+      box2   : Arena
+      Q2     : Type
+      pheno2 : Lens (Self Q2) box2
+      X2in   = (Double, Double) 
+      X2out  = (Double, Double)  --
+      box2   = IOArena X2in X2out
+      Q2     = Double
+      pheno2 = MkLens readout2 ode2 
+        where
+        readout2 : Q2 -> X2out
+        ode2 : (q2 : Q2) -> X2in -> Q2
+        readout2 q2 = (0.125 * q2, 0.075 * q2)
+        ode2 q2 (x2ain, x2bin) = q2 + (f q2 x2ain x2bin)
+          where
+            f : Double -> Double -> Double -> Double
+            f q2 x2ain x2bin = -0.2 * q2 + 1 * x2ain + 1 * x2bin
 
 
 
 
 
 
+-- Differential equation?
+
+ 
+{- There seems to be a bug in Idris 
+   that makes this not work.
+   (https://github.com/idris-lang/Idris-dev/issues/4842) 
 
 
+PreDiffeq : Nat -> (Double -> Double)-> DynSystem
+PreDiffeq ll f = MkDynSystem Double (Motor Double) lens 
+            where 
+              lens : Lens (Self Double) (Motor Double)
+              lens = MkLens id interp
+              where
+                l : Double
+                l = cast $ toIntNat ll
+                interp : Double -> () -> Double
+                interp x _ = x + (f x)/l
 
+Diffeq : Nat -> (Double -> Double) -> DynSystem
+Diffeq n f = install fastdyn fastbody lens --should have same states as PreDiffeq!!
+        where
+          fastdyn : DynSystem
+          fastdyn = speedUp (PreDiffeq n f) n
+          fastbody : Arena
+          fastbody = Motor (Vect n Double)
+          lens : Lens (CircPow (Motor Double) n) fastbody
+          lens = MotorPow Double n
 
+DiffStream : (n : Nat) -> (f : Double -> Double) -> Stream (pos (body (Diffeq n f)))
+DiffStream n f = run (Diffeq n f) refl start
+        where
+          start : state (Diffeq n f)
+          start = 1.0                    --argh, should work!
+          refl  : enclose (body (Diffeq n f))
+          refl = auto                    --argh, should work!
 
-
-
-
-
-
-
-
-
+-}
 
 
 
@@ -544,8 +714,8 @@ juxt ind arena = MkArena pjuxt djuxt
 
 
 {-
-juxtapose : (ind : Type) -> (ind -> Dynam) -> Dynam
-juxtapose ind dynam = MkDynam stjux bojux lejux
+juxtapose : (ind : Type) -> (ind -> DynSystem) -> DynSystem
+juxtapose ind dynam = MkDynSystem stjux bojux lejux
           where
             bod : ind -> Arena
             sta : ind -> Type
@@ -554,7 +724,7 @@ juxtapose ind dynam = MkDynam stjux bojux lejux
             bod = body . dynam
             sta = state . dynam
             sel = Self . sta
-            len i = life (dynam i)
+            len i = work (dynam i)
             stjux : Type
             bojux : Arena
             lejux : Lens (Self stjux) bojux
@@ -583,12 +753,12 @@ juxtLens : (ind : Type) ->
               ((i : ind) -> Lens (a1 i) (a2 i))
               ->
               Lens (juxt ind a1) (juxt ind a2)
-juxtLens ind a1 a2 life = MkLens obse inte 
+juxtLens ind a1 a2 work = MkLens obse inte 
           where
             obse : pos (juxt ind a1) -> pos (juxt ind a2)
-            obse p i = observe (life i) (p i)
+            obse p i = observe (work i) (p i)
             inte : (p : pos (juxt ind a1)) -> dis (juxt ind a2) (obse p) -> dis (juxt ind a1) p
-            inte p d i = interpret (life i) (p i) (d i)
+            inte p d i = interpret (work i) (p i) (d i)
 -}
 
 --- Distributivity ---
