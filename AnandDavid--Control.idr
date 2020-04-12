@@ -75,9 +75,12 @@ ControlDiagram : Lens (body ThreeSystems) UserObservation
 ControlDiagram = MkLens readout feed
       where
         readout : (IO Temp, CtrlSignal, Temp) -> IO Temp
-        feed    : (p : (IO Temp, CtrlSignal, Temp)) -> () -> dis (body ThreeSystems) p --((), Temp, CtrlSignal, Temp)
+        feed    : (p : (IO Temp, CtrlSignal, Temp)) -> () -> dis (body ThreeSystems) p
         readout (_, _, t) = pure t
-        feed (envTemp, ctrlSig, plantTemp) () = ?feed
+        feed (envTemp, ctrlSig, plantTemp) () = X
+          where
+            X : ((), Temp, CtrlSignal, Temp)
+            X = ?x
 
 WholeSystem : DynSystem
 WholeSystem = install ThreeSystems UserObservation ControlDiagram
