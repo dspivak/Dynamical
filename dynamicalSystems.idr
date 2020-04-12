@@ -1,6 +1,7 @@
 module Dynamical
 
 import Data.Vect
+
 %access public export
 
 --- Code by David I. Spivak and David Jaz Myers
@@ -57,14 +58,14 @@ AsFunctor a y = (p : pos a ** dis a p -> y)
 
 --- Special Arenas ---
 
-IOArena : (i : Type) -> (o : Type) -> Arena --positions as output and
-IOArena i o = MkArena o (\_ => i)           --distinctions as input
+ArenaIO : (i : Type) -> (o : Type) -> Arena --positions as output and
+ArenaIO i o = MkArena o (\_ => i)           --distinctions as input
 
 Self : Type -> Arena
-Self s = IOArena s s
+Self s = ArenaIO s s
 
 Closed : Arena
-Closed = IOArena () ()
+Closed = ArenaIO () ()
 
 
             
@@ -72,13 +73,13 @@ Closed = IOArena () ()
 --- Reflections to Type ---
 
 Exception : Type -> Arena
-Exception t = IOArena Void t
+Exception t = ArenaIO Void t
 
 Motor : Type -> Arena
-Motor t = IOArena () t
+Motor t = ArenaIO () t
 
 Sensor : Type -> Arena
-Sensor t = IOArena t ()
+Sensor t = ArenaIO t ()
 
 ev0 : Arena -> Arena
 ev0 a = Exception $ AsFunctor a Void
@@ -117,7 +118,7 @@ SensorFunction {t} {u} f = MkLens id (\_ => f)
 enclose : Arena -> Type
 enclose a = Lens a Closed
 
-encloseFunction : {t, u : Type} -> (t -> u) -> Lens (IOArena u t) Closed
+encloseFunction : {t, u : Type} -> (t -> u) -> Lens (ArenaIO u t) Closed
 encloseFunction {t} {u} f = MkLens (\_ => ()) (\d => \_ => f d)
 
 auto : {m : Type} -> enclose (Motor m)
@@ -155,18 +156,18 @@ extend {a} f = MkLens id joi
 --- sum ---
 
 zero : Arena
-zero = IOArena Void Void
+zero = ArenaIO Void Void
 
 infixr 4 <++>
 
 (<++>) : Arena -> Arena -> Arena
-(<++>) a b = MkArena posab disab
+(<++>) a b = MkArena posSum disSum
           where
-            posab : Type
-            posab = Either (pos a) (pos b)
-            disab : posab -> Type
-            disab (Left p)  = dis a p
-            disab (Right p) = dis b p
+            posSum : Type
+            posSum = Either (pos a) (pos b)
+            disSum : posSum -> Type
+            disSum (Left p)  = dis a p
+            disSum (Right p) = dis b p
 
 sum : (ind : Type ** ind -> Arena) -> Arena
 sum (ind ** arena) = MkArena psum dsum
@@ -202,17 +203,17 @@ copair {a1} {a2} {b} l1 l2 = MkLens obs int
 --- product ---
 
 one : Arena
-one = IOArena Void ()
+one = ArenaIO Void ()
 
 infixr 4 <**>
 
 (<**>) : Arena -> Arena -> Arena
-(<**>) a b = MkArena posab disab
+(<**>) a b = MkArena posProd disProd
           where
-            posab : Type
-            posab = (pos a, pos b)
-            disab : posab -> Type
-            disab (pa, pb) = Either (dis a pa) (dis b pb)
+            posProd : Type
+            posProd = (pos a, pos b)
+            disProd : posProd -> Type
+            disProd (pa, pb) = Either (dis a pa) (dis b pb)
 
 prodList : List Arena -> Arena
 prodList [] = one
@@ -253,12 +254,12 @@ pair {a} {b1} {b2} l1 l2 = MkLens obs int
 infixr 4 &
 
 (&) : Arena -> Arena -> Arena
-(&) a b = MkArena posab disab
+(&) a b = MkArena posJuxt disJuxt
           where 
-            posab : Type
-            posab = (pos a, pos b)
-            disab : posab -> Type
-            disab (pa, pb) = (dis a pa, dis b pb)
+            posJuxt : Type
+            posJuxt = (pos a, pos b)
+            disJuxt : posJuxt -> Type
+            disJuxt (pa, pb) = (dis a pa, dis b pb)
 
 juxtList : List Arena -> Arena
 juxtList [] = Closed
@@ -279,12 +280,12 @@ juxtLens {a1} {b1} {a2} {b2} l1 l2 = MkLens o i
 
 infixr 4 @@
 (@@) : Arena -> Arena -> Arena
-(@@) a b = MkArena posab disab
+(@@) a b = MkArena posCirc disCirc
           where
-            posab : Type
-            posab = (p : pos a ** dis a p -> pos b)
-            disab : posab -> Type
-            disab (p ** f) = (d : dis a p ** dis b (f d))
+            posCirc : Type
+            posCirc = (p : pos a ** dis a p -> pos b)
+            disCirc : posCirc -> Type
+            disCirc (p ** f) = (d : dis a p ** dis b (f d))
 
 
 
@@ -400,6 +401,7 @@ infixr 4 ^^
             arena : pos a -> Arena
             arena p = b @@ (Motor $ dis a p)
 
+{-
 eval : {a : Arena} -> {b : Arena} -> Lens (a & (b ^^ a)) b
 eval {a} {b} = MkLens obs int
           where
@@ -407,6 +409,7 @@ eval {a} {b} = MkLens obs int
             int : (p : (pos a, pos (b ^^ a))) -> dis b (obs p) -> dis (a & (b ^^ a)) p
             obs (pa, pab) = ?evalo
             int p d = ?evali
+-}
 
 --- DynSystemical systems ---
 
@@ -479,16 +482,16 @@ dynBehavior dyn st = current :: choice
 runBehav : (d : DynSystem) -> enclose (body d) -> (state d) -> Stream (pos $ body d)
 runBehav dyn phys st = toStreamBehavior (dynBehavior dyn st) phys
 
+--- IO ---
 
-UserDriven : DynSystem
-UserDriven = MkDynSystem (IO ()) (Motor Double) userInput
+IOMotor : Type -> DynSystem
+IOMotor a = MkDynSystem (IO a) (Motor $ IO a) passUserInput
           where 
-            userInput : Lens (Self (IO ())) (Motor Double)
-            userInput = MkLens obs (\_, _ => pure ())
+            passUserInput : Lens (Self $ IO a) (Motor $ IO a)
+            passUserInput = MkLens id listen
             where
-              obs : IO () -> Double
-              obs _ = fromMaybe 100.0 . parseDouble . unsafePerformIO $ getLine
-
+              listen : (userInput : IO a) -> () -> IO a
+              listen u _ = u
 
 
 --- Debugging ---
@@ -510,7 +513,7 @@ funcToDynSystem {s} {t} f = MkDynSystem t bodyf phenof
             where
               bodyf : Arena
               phenof : Lens (Self t) bodyf
-              bodyf = IOArena s t
+              bodyf = ArenaIO s t
               phenof = MkLens id (\_ => f)
 
 
@@ -568,7 +571,7 @@ VslX1 = MkDynSystem Double box1 pheno1
       pheno1 : Lens (Self Q1) box1
       X1in   = (Double, Double)
       X1out  = Double            --
-      box1   = IOArena X1in X1out
+      box1   = ArenaIO X1in X1out
       Q1     = Double
       pheno1 = MkLens readout1 ode1 
         where
@@ -591,7 +594,7 @@ VslX2 = MkDynSystem Double box2 pheno2
       pheno2 : Lens (Self Q2) box2
       X2in   = (Double, Double) 
       X2out  = (Double, Double)  --
-      box2   = IOArena X2in X2out
+      box2   = ArenaIO X2in X2out
       Q2     = Double
       pheno2 = MkLens readout2 ode2 
         where

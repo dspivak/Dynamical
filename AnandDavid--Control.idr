@@ -18,27 +18,19 @@ CtrlSignal = Maybe Bool  --True = up , False = down
 Temp : Type
 Temp = Double
 
-PlantArena : Arena
-PlantArena = IOArena (CtrlSignal, Temp) Temp
+PlantBody : Arena
+PlantBody = ArenaIO (CtrlSignal, Temp) Temp
 
-CtrlArena : Arena
-CtrlArena = IOArena Temp CtrlSignal
+CtrlBody : Arena
+CtrlBody = ArenaIO Temp CtrlSignal
 
-Outer : Arena
-Outer = IOArena Temp Temp
+UserObservation : Arena
+UserObservation = Motor $ IO Temp
 
-WD : Lens (PlantArena & CtrlArena) Outer
-WD = MkLens readout go
+Plant : Double -> Double -> DynSystem 
+Plant conduct furnPow = MkDynSystem Double PlantBody PlantBehavior
       where
-        readout : (Temp, CtrlSignal) -> Temp
-        go      : (p : (Temp, CtrlSignal)) -> Temp -> (dis (PlantArena & CtrlArena) p)
-        readout = fst
-        go p t  = (?a, ?c) --((snd p, t), fst p)
-
-PlantDynam : Double -> Double -> DynSystem 
-PlantDynam conduct furnPow = MkDynSystem Double PlantArena PlantBehavior
-      where
-        PlantBehavior : Lens (Self Temp) PlantArena
+        PlantBehavior : Lens (Self Temp) PlantBody
         PlantBehavior = MkLens id int
           where
             mix : Double -> Double -> Double
@@ -48,10 +40,10 @@ PlantDynam conduct furnPow = MkDynSystem Double PlantArena PlantBehavior
             int inside (Just True, outside)  = (mix inside outside) + furnPow
             int inside (Just False, outside) = (mix inside outside) - furnPow
 
-CtrlDynam : Double -> Double -> DynSystem
-CtrlDynam setpoint threshold = MkDynSystem CtrlSignal CtrlArena CtrlBehavior
+Ctrl : Double -> Double -> DynSystem
+Ctrl setpoint threshold = MkDynSystem CtrlSignal CtrlBody CtrlBehavior
       where
-        CtrlBehavior : Lens (Self CtrlSignal) CtrlArena
+        CtrlBehavior : Lens (Self CtrlSignal) CtrlBody
         CtrlBehavior = MkLens id int
           where
             int : (c : CtrlSignal) -> Temp -> CtrlSignal
@@ -62,18 +54,32 @@ CtrlDynam setpoint threshold = MkDynSystem CtrlSignal CtrlArena CtrlBehavior
                             else Nothing
 
 
+Environment : DynSystem
+Environment = IOMotor Temp
+
+{-
+CtrlBody : Arena
+CtrlBody = ArenaIO Temp CtrlSignal
+
+PlantBody : Arena
+PlantBody = ArenaIO (CtrlSignal, Temp) Temp
+
+UserObservation : Arena
+UserObservation = Motor $ IO Temp
+-}
+ThreeSystems : DynSystem
+ThreeSystems = juxtapose [Environment, Ctrl 100.0 2.0, Plant 0.5 1.0]
+
+ControlDiagram : Lens (body ThreeSystems) UserObservation
+ControlDiagram = MkLens readout feed
+      where
+        readout : (IO Temp, CtrlSignal, Temp) -> IO Temp
+        feed    : (p : (IO Temp, CtrlSignal, Temp)) -> () -> dis (body ThreeSystems) p --((), Temp, CtrlSignal, Temp)
+        readout (_, _, t) = pure t
+        feed (envTemp, ctrlSig, plantTemp) () = ?feed
+
 WholeSystem : DynSystem
-WholeSystem = install (myPlant &&& myCtrl) Outer WD
-        where 
-          myPlant : DynSystem
-          myPlant = PlantDynam 0.5 1.0
-          myCtrl  : DynSystem
-          myCtrl  = CtrlDynam 100 2.0
-
-
-
-
-
+WholeSystem = install ThreeSystems UserObservation ControlDiagram
 
 
 
