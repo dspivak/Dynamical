@@ -484,14 +484,16 @@ runBehav dyn phys st = toStreamBehavior (dynBehavior dyn st) phys
 
 --- IO ---
 
-IOMotor : Type -> DynSystem
-IOMotor a = MkDynSystem (IO a) (Motor $ IO a) passUserInput
+
+
+IOMotor : (a : Type) -> (String -> a) -> DynSystem
+IOMotor a Cast = MkDynSystem (IO a) (Motor $ IO a) passUserInput
           where 
             passUserInput : Lens (Self $ IO a) (Motor $ IO a)
             passUserInput = MkLens id listen
             where
-              listen : (userInput : IO a) -> () -> IO a
-              listen u _ = u
+              listen : (old : IO a) -> () -> IO a
+              listen _ _ = map Cast getLine
 
 
 --- Debugging ---

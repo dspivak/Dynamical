@@ -1,6 +1,7 @@
 module Ctrl
 
 import dynamicalSystems
+import Data.String
 
 %access public export
 
@@ -55,7 +56,7 @@ Ctrl setpoint threshold = MkDynSystem CtrlSignal CtrlBody CtrlBehavior
 
 
 Environment : DynSystem
-Environment = IOMotor Temp
+Environment = IOMotor Temp (fromMaybe 100.0 . parseDouble)
 
 {-
 CtrlBody : Arena
