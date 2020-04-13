@@ -68,7 +68,17 @@ Closed : Arena
 Closed = ArenaIO () ()
 
 
-            
+--- Factorization of lenses ---
+
+Factor : {a, c : Arena} -> Lens a c -> (b : Arena ** (Lens b c, Lens a b))
+Factor {a} {c} f = (b ** (cartf, vertf)) where
+       b     : Arena
+       vertf : Lens a b
+       cartf : Lens b c
+       b     = MkArena (pos a) $ dis c . observe f
+       vertf = MkLens id $ interpret f
+       cartf = MkLens (observe f) (\_ => id)
+
 
 --- Reflections to Type ---
 
