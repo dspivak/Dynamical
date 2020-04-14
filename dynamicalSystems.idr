@@ -76,7 +76,7 @@ Factor {a} {c} f = (b ** (cartf, vertf)) where
        vertf : Lens a b
        cartf : Lens b c
        b     = MkArena (pos a) $ dis c . observe f
-       vertf = MkLens id $ interpret f
+       vertf = MkLens id (interpret f)
        cartf = MkLens (observe f) (\_ => id)
 
 
@@ -346,6 +346,9 @@ comultPow : (s : Type) -> (n : Nat) -> Lens (Self s) (CircPow (Self s) n)
 comultPow s  Z    = counit s
 comultPow s (S n) = (circLens (idLens (Self s)) (comultPow s n)) <.> (comult s)
 
+
+--- Behavior --- 
+
 codata Behavior : (ar : Arena) -> Type where
           (::) : (p : pos ar) -> (dis ar p -> Behavior ar) -> Behavior ar
 
@@ -559,7 +562,7 @@ FibSeq = run Fibonacci auto (1, 1)
 
 -- take 10 FibSeq
 
--- Difference equation
+-- Difference equation from arxiv.org/abs/1408.1598
 
 DncEq : (Double -> Double) -> DynSystem
 DncEq f = MkDynSystem Double (Motor Double) lens
