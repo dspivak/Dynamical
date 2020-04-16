@@ -22,7 +22,6 @@ record Arena where
 
 --- Morphisms---
 
-
 record Lens (dom : Arena) (cod : Arena) where
        constructor MkLens
        observe   : pos dom -> pos cod
@@ -324,6 +323,7 @@ MotorPow : (t : Type) -> (n : Nat) -> Lens (CircPow (Motor t) n) (Motor (Vect n 
 MotorPow t Z = MkLens (\_ => Nil) (\_, _ => ())
 
 
+
 --- Selves are comonoids ---
 
 counit : (s : Type) -> Lens (Self s) Closed
@@ -562,7 +562,7 @@ FibSeq = run Fibonacci auto (1, 1)
 
 -- take 10 FibSeq
 
--- Difference equation from arxiv.org/abs/1408.1598
+-- Setup from arxiv.org/abs/1408.1598
 
 DncEq : (Double -> Double) -> DynSystem
 DncEq f = MkDynSystem Double (Motor Double) lens

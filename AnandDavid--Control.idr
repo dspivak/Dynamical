@@ -49,10 +49,10 @@ Ctrl setpoint threshold = MkDynSystem CtrlSignal CtrlBody CtrlBehavior
           where
             int : (c : CtrlSignal) -> Temp -> CtrlSignal
             int _ temp = if (temp - setpoint) < - threshold
-                         then Just True
-                         else if (temp - setpoint) > threshold
-                            then Just False
-                            else Nothing
+                       then Just True
+                       else if (temp - setpoint) > threshold
+                          then Just False
+                          else Nothing
 
 
 Environment : DynSystem
