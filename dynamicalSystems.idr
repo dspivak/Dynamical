@@ -536,7 +536,11 @@ runBehav dyn phys st = toStreamBehavior (dynBehavior dyn st) phys
 
 --- IO ---
 
-
+-- EmitterM : (m : Type -> Type) -> Monad m => (a : Type) -> DynSystem
+-- EmitterM m a = MkDynSystem (m a) (Emitter (m a)) passInput
+--           where
+--             passInput : Lens (Self (m a)) (Emitter (m a))
+--             passInput = MkLens id 
 
 IOEmitter : (a : Type) -> (String -> a) -> DynSystem
 IOEmitter a Cast = MkDynSystem (IO a) (Emitter $ IO a) passUserInput
@@ -550,14 +554,14 @@ IOEmitter a Cast = MkDynSystem (IO a) (Emitter $ IO a) passUserInput
 
 --- Debugging ---
 
-current : (d : DynSystem) -> state d -> pos (body d)
-current d s = observe (pheno d) s
+-- current : (d : DynSystem) -> state d -> pos (body d)
+-- current d s = observe (pheno d) s
 
-feed : (dyn : DynSystem) -> (s : state dyn) -> dis (body dyn) (observe (pheno dyn) s) -> state dyn
-feed dyn s d = interpret play s d
-          where 
-            play : Lens (Self (state dyn)) (body dyn)
-            play = pheno dyn
+-- feed : (dyn : DynSystem) -> (s : state dyn) -> dis (body dyn) (observe (pheno dyn) s) -> state dyn
+-- feed dyn s d = interpret play s d
+--           where 
+--             play : Lens (Self (state dyn)) (body dyn)
+--             play = pheno dyn
 
 --- Examples ---
 
