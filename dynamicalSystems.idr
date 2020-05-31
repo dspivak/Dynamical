@@ -330,7 +330,19 @@ record Comonoid where
        constructor MkComonoid
        domains    : Arena
        identities : Lens domains Closed
-       codscomps  : Lens domains (domains @@ domains)
+       codsComps  : Lens domains (domains @@ domains)
+
+codata Behavior : (ar : Arena) -> Type where
+          (::) : (p : pos ar) -> (dis ar p -> Behavior ar) -> Behavior ar
+
+head : {ar : Arena} -> Behavior ar -> pos ar
+head {ar} (h :: _) = h
+
+tail : {ar : Arena} -> (b : Behavior ar) -> dis ar (head b) -> Behavior ar
+tail {ar} (_ :: t) = t
+
+
+
 
 MonSensor : (t : Type) -> t -> (t -> t -> t) -> Comonoid
 MonSensor t neut plus = MkComonoid sens idy cc
@@ -352,16 +364,6 @@ TrajComon = MonSensor Nat Z (+)
 
 
 
-{-
-infixr 4 @@
-(@@) : Arena -> Arena -> Arena
-(@@) a b = MkArena posab disab
-          where
-            posab : Type
-            posab = (p : pos a ** dis a p -> pos b)
-            disab : posab -> Type
-            disab (p ** f) = (d : dis a p ** dis b (f d))
--}
 --- Selves are comonoids ---
 
 
@@ -389,23 +391,6 @@ comultPow : (s : Type) -> (n : Nat) -> Lens (Self s) (CircPow (Self s) n)
 comultPow s  Z    = counit s
 comultPow s (S n) = (circLens (idLens (Self s)) (comultPow s n)) <.> (comult s)
 
-codata Behavior : (ar : Arena) -> Type where
-          (::) : (p : pos ar) -> (dis ar p -> Behavior ar) -> Behavior ar
-
-head : Behavior ar -> pos ar
-head (p :: _) = p
-
-tail : (b : Behavior ar) -> dis ar (head b) -> Behavior ar
-tail (_ :: t) = t
-
-toStreamBehavior : {a : Arena} -> (b : Behavior a) -> (phys : enclose a) -> Stream (pos a)
-toStreamBehavior {a} b phys = currpos :: toStreamBehavior rest phys
-  where
-    currpos : pos a
-    currpos = head b
-
-    rest : Behavior a
-    rest = tail b $ interpret phys currpos ()
 
 
 
@@ -522,6 +507,14 @@ run d e s = outp :: (run d e next)
 
 
 
+toStreamBehavior : {a : Arena} -> (b : Behavior a) -> (phys : enclose a) -> Stream (pos a)
+toStreamBehavior {a} b phys = currpos :: toStreamBehavior rest phys
+  where
+    currpos : pos a
+    currpos = head b
+
+    rest : Behavior a
+    rest = tail b $ interpret phys currpos ()
 
 dynBehavior : (d : DynSystem) -> (state d) -> Behavior (body d)
 dynBehavior dyn st = current :: choice
