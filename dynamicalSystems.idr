@@ -596,7 +596,18 @@ Fibonacci = install Prefib (Emitter Integer) fibwd
 FibSeq : Stream Integer
 FibSeq = run Fibonacci auto (1, 1)
 
+
+-- Run this in the REPL:
 -- take 10 FibSeq
+
+
+
+
+
+
+
+
+
 
 -- Setup from arxiv.org/abs/1408.1598
 
