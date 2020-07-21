@@ -10,8 +10,8 @@ import Data.Vect
 
 ------ The category of arenas ------
 
-
-
+--Also called Cont, the category of containers.
+--Equivalent to Poly, the category of polynomial functors in one variable.
 
 
 --- Objects ---
